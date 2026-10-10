@@ -37,6 +37,27 @@ describe('CloudflareStorage deletion', () => {
     expect(mockSend).toHaveBeenCalledTimes(1);
   });
 
+  test('supports a configured upload URL ending with a slash', async () => {
+    const trailingSlashStorage = new CloudflareStorage(
+      'account',
+      'access-key',
+      'secret-key',
+      'auto',
+      'bucket-name',
+      'https://assets.example.com/media/',
+    );
+
+    await trailingSlashStorage.removeFile(
+      'https://assets.example.com/media/customer-1.png',
+    );
+
+    expect(DeleteObjectCommand).toHaveBeenCalledWith({
+      Bucket: 'bucket-name',
+      Key: 'customer-1.png',
+    });
+    expect(mockSend).toHaveBeenCalledTimes(1);
+  });
+
   test('refuses deletion through another hostname or outside the configured prefix', async () => {
     await expect(
       storage.removeFile('https://attacker.example.net/media/leads/customer-1.png'),
