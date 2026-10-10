@@ -128,7 +128,10 @@ class CloudflareStorage implements IUploadProvider {
       throw new Error('Cannot delete an object outside the configured upload URL.');
     }
 
-    const basePath = baseUrl.pathname.replace(/\\/+$/, '');
+    let basePath = baseUrl.pathname;
+    while (basePath.endsWith('/')) {
+      basePath = basePath.slice(0, -1);
+    }
     const prefix = `${basePath}/`;
     if (!targetUrl.pathname.startsWith(prefix)) {
       throw new Error('Cannot delete an object outside the configured upload path.');
