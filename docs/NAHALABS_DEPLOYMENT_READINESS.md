@@ -16,6 +16,8 @@ Do not deploy the stock Compose stack publicly or create a frontend-only Render 
 - Compose contains development credentials, including `AUTH_SECRET: "YourSpecialString!@#111"`, predictable database passwords, and example Google OAuth values. These are not production secrets.
 - The root `.env.example` lists database, auth, storage, URL, email, OAuth, newsletter, browser/data-provider and OpenAI settings. Several are feature-specific; they must be classified by code path before deciding which are truly optional.
 - The Temporal module in `shared/server/temporal/temporal.module.ts` passes only `address` and `namespace` to `nestjs-temporal-core`; it does not configure TLS or API-key authentication. The current code therefore does not establish a working Temporal Cloud connection. Treat self-hosted Temporal as the only verified direction unless Cloud support is implemented and tested.
+- The backend starts an HTTP server on `PORT` or 3000; the orchestrator starts as a Nest application context and relies on Temporal worker registration to start its worker. The repository does not yet demonstrate a deployment-ready health/readiness endpoint or successful live dependency checks.
+- The frontend build uses Vite and requires `VITE_BACKEND_URL` and `VITE_PUBLIC_WS` to point at the deployed backend/websocket endpoint. Backend CORS is derived from `FRONTEND_URL`.
 - The source repository is AGPL-3.0. Review licence obligations before offering a modified hosted version to third parties.
 
 ## Hosting assessment
@@ -43,11 +45,11 @@ Before any public deployment:
 
 ## Next engineering steps
 
-1. Continue inspecting runtime config validation and upload handling; the Prisma schema and Temporal module have been located, and the current Temporal module lacks explicit Cloud TLS/auth configuration.
-2. Trace each environment variable to its use and classify it as required, optional, or feature-gated.
-3. Select a hosting topology that can keep the backend and orchestrator running, provides durable storage, and secures Temporal.
-4. Add deployment configuration only after those checks; then run builds and a smoke test before creating public services.
+1. Trace environment-variable use and upload handling to classify settings as required, optional, or feature-gated.
+2. Decide a hosting topology that keeps backend and orchestrator processes alive, provides durable storage, and secures Temporal.
+3. Add runtime health/readiness checks and validate migrations, worker connectivity, and upload storage.
+4. Run a live smoke test against dedicated infrastructure before enabling any social actions or calling the deployment complete.
 
 ## Current state
 
-A GitHub Actions build workflow has been added on the readiness branch. The first successful remote run completed dependency installation and built the frontend, backend, and orchestrator successfully (run: https://github.com/Naha1981/growchief-nahalabs/actions/runs/38051200823). During that check, the postinstall script resolved an incompatible Prisma 8 release-candidate CLI; the root Prisma generate/db-push scripts have now been pinned to Prisma 6.13.0 to match `@prisma/client` and the latest CI run passed. This is a build check only, not a runtime/integration test. No Render resources were created or changed as part of this audit. No production secrets were generated or stored. This file is a readiness record, not a claim that deployment or runtime testing has succeeded.
+A GitHub Actions build workflow has been added on the readiness branch. The first successful remote run completed dependency installation and built the frontend, backend, and orchestrator (run: https://github.com/Naha1981/growchief-nahalabs/actions/runs/38051200823). The follow-up run for the latest Prisma pin/docs commit also passed all steps, including dependency installation and the application build (run: https://github.com/Naha1981/growchief-nahalabs/actions/runs/38052091131). The root Prisma generate/db-push scripts are pinned to Prisma 6.13.0 to match `@prisma/client`. The workflow now additionally validates `schema.prisma` with Prisma 6.13.0 before building. This is a build/schema check only, not a runtime/integration test. No Render resources were created or changed as part of this audit. No production secrets were generated or stored. This file is a readiness record, not a claim that deployment or runtime testing has succeeded.
