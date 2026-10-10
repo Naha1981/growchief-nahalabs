@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import 'multer';
 import { extension as findExtension } from 'mime-types';
 import { IUploadProvider } from './upload.interface';
@@ -107,14 +107,66 @@ class CloudflareStorage implements IUploadProvider {
     };
   }
 
-  // Implement the removeFile method from IUploadProvider
+  private getObjectKey(filePath: string): string {
+    let baseUrl: URL;
+    let targetUrl: URL;
+
+    try {
+      baseUrl = new URL(this._uploadUrl);
+      targetUrl = new URL(filePath);
+    } catch {
+      throw new Error('Cannot delete an object: the supplied path is not an absolute URL.');
+    }
+
+    if (
+      targetUrl.origin !== baseUrl.origin ||
+      targetUrl.username ||
+      targetUrl.password ||
+      targetUrl.search ||
+      targetUrl.hash
+    ) {
+      throw new Error('Cannot delete an object outside the configured upload URL.');
+    }
+
+    const basePath = baseUrl.pathname.replace(/\\/+$/, '');
+    const prefix = `${basePath}/`;
+    if (!targetUrl.pathname.startsWith(prefix)) {
+      throw new Error('Cannot delete an object outside the configured upload path.');
+    }
+
+    const encodedKey = targetUrl.pathname.slice(prefix.length);
+    let segments: string[];
+    try {
+      segments = encodedKey.split('/').map((segment) => decodeURIComponent(segment));
+    } catch {
+      throw new Error('Cannot delete an object with an invalid encoded path.');
+    }
+
+    if (
+      segments.length === 0 ||
+      segments.some(
+        (segment) =>
+          !segment ||
+          segment === '.' ||
+          segment === '..' ||
+          segment.includes('/') ||
+          segment.includes('\\'),
+      )
+    ) {
+      throw new Error('Cannot delete an object with an invalid key.');
+    }
+
+    return segments.join('/');
+  }
+
   async removeFile(filePath: string): Promise<void> {
-    // const fileName = filePath.split('/').pop(); // Extract the filename from the path
-    // const command = new DeleteObjectCommand({
-    //   Bucket: this._bucketName,
-    //   Key: fileName,
-    // });
-    // await this._client.send(command);
+    const key = this.getObjectKey(filePath);
+    await this._client.send(
+      new DeleteObjectCommand({
+        Bucket: this._bucketName,
+        Key: key,
+      }),
+    );
   }
 }
 
