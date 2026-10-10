@@ -48,7 +48,8 @@ export class AuthMiddleware implements NestMiddleware {
       const setOrg =
         organization.find((org) => org.id === orgHeader) || organization[0];
 
-      if (!organization) {
+      // A filtered array is truthy even when empty; require a valid active org.
+      if (!setOrg) {
         throw new HttpUnauthorized();
       }
 
