@@ -1,6 +1,8 @@
 const { AuthMiddleware } = require('../apps/backend/src/services/auth/auth.middleware.ts');
 const { EncryptionService } = require('../shared/server/encryption/encryption.service.ts');
 const { HttpUnauthorized } = require('../shared/server/exceptions/http.exceptions.ts');
+const crypto = require('node:crypto');
+const originalAuthSecret = process.env.AUTH_SECRET;
 
 function makeRequest(overrides = {}) {
   return {
@@ -35,6 +37,25 @@ describe('AuthMiddleware', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+    if (originalAuthSecret === undefined) {
+      delete process.env.AUTH_SECRET;
+    } else {
+      process.env.AUTH_SECRET = originalAuthSecret;
+    }
+  });
+
+  test('fails closed on missing, short, placeholder, or repetitive auth secrets', () => {
+    delete process.env.AUTH_SECRET;
+    expect(() => EncryptionService.validateAuthSecret()).toThrow(/AUTH_SECRET/);
+
+    process.env.AUTH_SECRET = 'YourSpecialString!@#111';
+    expect(() => EncryptionService.validateAuthSecret()).toThrow(/AUTH_SECRET/);
+
+    process.env.AUTH_SECRET = 'A'.repeat(40);
+    expect(() => EncryptionService.validateAuthSecret()).toThrow(/AUTH_SECRET/);
+
+    process.env.AUTH_SECRET = crypto.randomBytes(32).toString('base64url');
+    expect(() => EncryptionService.validateAuthSecret()).not.toThrow();
   });
 
   test('rejects an authenticated user when no active organization is available', async () => {
