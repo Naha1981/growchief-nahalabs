@@ -43,6 +43,9 @@ jobs:
       - name: Validate Prisma schema
         run: pnpm dlx prisma@6.13.0 validate --schema ./schema.prisma
 
+      - name: Test auth middleware
+        run: pnpm run test:auth
+
       - name: Build application
         env:
           NODE_OPTIONS: --max-old-space-size=4096
