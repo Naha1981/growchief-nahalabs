@@ -10,7 +10,7 @@
   "scripts": {
     "dev:billing": "npx concurrently \"stripe listen --forward-to localhost:3000/webhook/billing\" \"npm run dev\"",
     "dev": "pnpm run --filter ./apps/frontend --filter ./apps/backend --filter ./apps/orchestrator --parallel dev",
-    "build": "pnpm -r --workspace-concurrency=1 --filter ./apps/frontend --filter ./apps/backend -filter ./apps/orchestrator run build",
+    "build": "pnpm -r --workspace-concurrency=1 --filter ./apps/frontend --filter ./apps/backend --filter ./apps/orchestrator run build",
     "build:backend": "pnpm -r --filter ./apps/backend run build",
     "build:frontend": "pnpm -r --filter ./apps/frontend run build",
     "build:orchestrator": "pnpm -r --filter ./apps/orchestrator run build",
