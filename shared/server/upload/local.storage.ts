@@ -1,14 +1,14 @@
 import { IUploadProvider } from './upload.interface';
 import { mkdirSync, unlink, writeFileSync } from 'fs';
 import { extname } from 'path';
-import axios from 'axios';
+import { fetchPublicRemoteUrl } from './public.remote.download';
 import { extension } from 'mime-types';
 
 export class LocalStorage implements IUploadProvider {
   constructor(private uploadDirectory: string) {}
 
   async uploadSimple(path: string) {
-    const loadImage = await axios.get(path, { responseType: 'arraybuffer' });
+    const loadImage = await fetchPublicRemoteUrl(path);
     const contentType =
       loadImage?.headers?.['content-type'] ||
       loadImage?.headers?.['Content-Type'];
