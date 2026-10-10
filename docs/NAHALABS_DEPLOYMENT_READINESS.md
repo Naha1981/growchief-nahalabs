@@ -65,3 +65,10 @@ A GitHub Actions build workflow has been added on the readiness branch. The firs
 - Cloudflare upload code sends `ACL: 'public-read'` and its `removeFile()` method does not delete objects. Confirm bucket policy/ACL compatibility and intended file privacy; implement and test deletion before relying on cleanup.
 - Root endpoint returns `App is running!`, but this is only a process response and does not prove database, Temporal, storage or worker readiness.
 - These are source-code findings, not proof of an exploitable public instance: no runtime service was deployed or tested. Treat SSRF, upload controls, secret validation, session policy and readiness probes as blockers for public production deployment.
+
+
+## Auth middleware correction — 2026-10-10
+
+- Fixed a fail-open logic check in `apps/backend/src/services/auth/auth.middleware.ts`: the middleware previously tested `if (!organization)`, but `organization` is an array and remains truthy when empty. It now rejects the request when no active organization can be selected (`if (!setOrg)`). This prevents an authenticated account with no active organization from continuing with an undefined `req.org`.
+- This is a targeted source correction, not a substitute for an automated middleware unit test or integration test. The repository's backend package scripts expose build/format/dev/start commands but no test script; a repeatable auth middleware test and CI test job should be added before production readiness.
+- CI after commit `11a0437bd935d87b86c75ac287e68a383cec6dd9` is pending confirmation; do not infer success from the earlier green build.
