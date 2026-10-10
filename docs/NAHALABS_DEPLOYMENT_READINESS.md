@@ -13,9 +13,11 @@ Do not deploy the stock Compose stack publicly or create a frontend-only Render 
 - Root package declares Node.js `>=20 <21` and pnpm `10.7.0`. Use Node 20 unless the project is deliberately upgraded and verified; do not assume Node 24 is compatible.
 - Root package scripts build the frontend, backend, and orchestrator; Prisma schema is referenced as `./schema.prisma` (not `prisma/schema.prisma`).
 - `docker-compose.yml` starts the application plus its own PostgreSQL, Temporal server, Temporal PostgreSQL, Elasticsearch, Temporal admin tools, and Temporal UI.
-- Compose contains development credentials, including `AUTH_SECRET: "YourSpecialString!@#111"`, predictable database passwords, and example Google OAuth values. These are not production secrets.
-- The root `.env.example` lists database, auth, storage, URL, email, OAuth, newsletter, browser/data-provider and OpenAI settings. Several are feature-specific; they must be classified by code path before deciding which are truly optional.
+- Compose contains development credentials, including `AUTH_SECRET: "YourSpecialString!@#111"`, predictable database passwords, and example Google OAuth values. These are not production secrets. It also publishes ports for GrowChief (`5002`), Temporal (`7233`) and Temporal UI (`8080`); bind/protect management and internal ports rather than exposing them publicly.
+- The root `.env.example` lists database, auth, storage, URL, email, OAuth, newsletter, data-provider and OpenAI settings. `DATABASE_URL` is used by Prisma; `STORAGE_PROVIDER` defaults to `local`; Cloudflare mode constructs an S3 client from account ID, access key, secret key, region, bucket name and bucket URL. `FRONTEND_URL` controls backend CORS. The frontend's `VITE_BACKEND_URL` and `VITE_PUBLIC_WS` are build-time endpoint settings. Google OAuth, email/newsletter, and data-provider keys are feature-dependent; complete usage tracing remains outstanding.
 - The Temporal module in `shared/server/temporal/temporal.module.ts` passes only `address` and `namespace` to `nestjs-temporal-core`; it does not configure TLS or API-key authentication. The current code therefore does not establish a working Temporal Cloud connection. Treat self-hosted Temporal as the only verified direction unless Cloud support is implemented and tested.
+- The backend starts an HTTP server on `PORT` or 3000; the orchestrator starts as a Nest application context and relies on Temporal worker registration to start its worker. Backend routes `GET /health/live` and `GET /health/ready` now distinguish process liveness from dependency readiness: readiness queries PostgreSQL and Temporal and returns 503 on failure. They are unit-tested but have not been exercised against live infrastructure, and they do not prove the separate orchestrator worker is running. Registration is enabled by default: `canRegister()` returns `!process.env.DISABLE_REGISTRATION`; set `DISABLE_REGISTRATION` to a non-empty value after controlled initial setup if public self-registration is not intended.
+- The frontend build uses Vite and requires `VITE_BACKEND_URL` and `VITE_PUBLIC_WS` to point at the deployed backend/websocket endpoint. Backend CORS is derived from `FRONTEND_URL`.
 - The source repository is AGPL-3.0. Review licence obligations before offering a modified hosted version to third parties.
 
 ## Hosting assessment
@@ -38,16 +40,54 @@ Before any public deployment:
 - Configure Google OAuth only if Google sign-in is required; set exact production callback URLs.
 - Configure email/newsletter and data-provider keys only if the enabled features need them. Never commit credentials into Git.
 - Plan on self-hosted Temporal for the current code, or first implement and test Temporal Cloud TLS/authentication support. Do not point this configuration at a Cloud endpoint and assume it is secure or compatible.
-- Confirm health checks, migrations, worker startup, file uploads, sign-in, and a harmless end-to-end workflow before enabling any outbound social actions.
+- Exercise the new health routes against the real non-production services, and confirm migrations, worker startup, file uploads, sign-in, and a harmless end-to-end workflow before enabling any outbound social actions.
 - Keep social automation paused until account authorization, platform terms, rate limits, and opt-out controls are reviewed.
 
 ## Next engineering steps
 
-1. Continue inspecting runtime config validation and upload handling; the Prisma schema and Temporal module have been located, and the current Temporal module lacks explicit Cloud TLS/auth configuration.
-2. Trace each environment variable to its use and classify it as required, optional, or feature-gated.
-3. Select a hosting topology that can keep the backend and orchestrator running, provides durable storage, and secures Temporal.
-4. Add deployment configuration only after those checks; then run builds and a smoke test before creating public services.
+1. Finish tracing environment variables, authentication/session configuration, and feature-specific integrations.
+2. Decide a hosting topology that keeps backend and orchestrator processes alive, provides durable storage, and secures Temporal.
+3. Establish a safe production database initialization path. No Prisma migrations directory was found in the inspected repository tree; do not assume `prisma db push` is a reviewed migration strategy for production.
+4. Exercise `/health/live` and `/health/ready` against the target environment, then test worker connectivity, uploads, authentication and one harmless workflow.
+5. Run a live smoke test against dedicated infrastructure before enabling any social actions or calling the deployment complete.
 
 ## Current state
 
-A GitHub Actions build workflow has been added on the readiness branch. Its first run failed before the build at Node setup; that workflow was corrected and a subsequent run is currently installing dependencies. No Render resources were created or changed as part of this audit. No production secrets were generated or stored. This file is a readiness record, not a claim that deployment or runtime testing has succeeded.
+A GitHub Actions build workflow has been added on the readiness branch. The first successful remote run completed dependency installation and built the frontend, backend, and orchestrator (run: https://github.com/Naha1981/growchief-nahalabs/actions/runs/38051200823). The follow-up run for the latest Prisma pin/docs commit also passed all steps, including dependency installation and the application build (run: https://github.com/Naha1981/growchief-nahalabs/actions/runs/38052091131). The root Prisma generate/db-push scripts are pinned to Prisma 6.13.0 to match `@prisma/client`. The workflow now additionally validates `schema.prisma` with Prisma 6.13.0 before building. Latest run 38052288448 passed dependency installation, Prisma schema validation and application build: https://github.com/Naha1981/growchief-nahalabs/actions/runs/38052288448. This is a build/schema check only, not a runtime/integration test. No Render resources were created or changed as part of this audit. No production secrets were generated or stored. This file is a readiness record, not a claim that deployment or runtime testing has succeeded.
+
+
+## Authentication and upload code-path audit — 2026-10-10
+
+- JWT signing and verification now go through `EncryptionService` secret validation. The backend calls `validateAuthSecret()` before creating the Nest app and refuses to start if the secret is missing, shorter than 32 characters, an obvious placeholder, or a repeated-character value. This is a baseline check, not proof of cryptographic entropy; production must still use a unique high-entropy secret and never reuse the Compose sample.
+- Auth cookies are configured `httpOnly`, `secure`, and `sameSite: 'none'`, with a one-year expiry. Confirm production frontend/backend domain alignment, HTTPS, CSRF protections, and session lifetime/revocation policy before launch.
+- The backend configures a 20 MB JSON body limit. Reassess this against endpoints that accept user-controlled payloads; a generous global limit can increase resource-exhaustion exposure.
+- Both local and Cloudflare upload providers now route `uploadSimple(path)` through `shared/server/upload/public.remote.download.ts`. The guard allows HTTP(S) only, rejects IP-literal/internal hostnames/URL credentials/nonstandard ports, resolves DNS and rejects any non-public address, pins the selected address to the socket lookup, disables redirects and proxy use, applies a 15-second timeout and caps download size at 8 MiB. Unit tests cover disallowed URL forms, private/reserved IPv4/IPv6 targets, DNS resolving to a link-local address, and safe request options. This is a source-level mitigation; it still needs a runtime upload smoke test in isolated infrastructure before a public launch.
+- Cloudflare R2 upload no longer sends the unsupported S3 `ACL: 'public-read'` header. R2 public access is configured at bucket level via a custom domain or the non-production `r2.dev` URL, not per-object ACLs; verify `CLOUDFLARE_BUCKET_URL` and bucket visibility before enabling uploads in an actual environment. R2 deletion now sends `DeleteObjectCommand` only after validating the configured origin and URL path prefix.
+- The original root endpoint still returns `App is running!`. The new `GET /health/live` route checks process responsiveness, and `GET /health/ready` checks PostgreSQL with `SELECT 1` and Temporal's search-attribute service. Failures return a generic 503 without exposing connection details; neither route has yet been exercised against live services or a running orchestrator.
+- These are source-code findings, not proof of an exploitable public instance: no runtime service was deployed or tested. The URL-fetch SSRF controls, JWT-secret validation, path-contained local deletion, guarded R2 deletion, and backend health probes are implemented and unit-tested. Runtime uploads, R2 bucket visibility/deletion, session/CSRF policy, database migration/backups, and orchestrator worker/e2e checks remain blockers for public production deployment.
+
+
+
+## Auth middleware correction and regression tests — 2026-10-10
+
+- Fixed a fail-open logic check in `apps/backend/src/services/auth/auth.middleware.ts`: the middleware previously tested `if (!organization)`, but `organization` is an array and remains truthy when empty. It now rejects the request when no active organization can be selected (`if (!setOrg)`).
+- Added `jest.config.cjs` and root `test:unit` script so CI runs every `tests/**/*.test.cjs` regression suite, not only authentication tests. Coverage includes auth middleware, JWT-secret guards, URL/DNS SSRF checks, backend health routes, safe local file deletion and safe Cloudflare R2 deletion.
+- GitHub Actions run [38060874808](https://github.com/Naha1981/growchief-nahalabs/actions/runs/38060874808) passed dependency installation, Prisma 6.13.0 schema validation, all 21 tests across five suites, and the frontend/backend/orchestrator build on commit `e9bbe68b694385adc98ba9a180481152ed81b081`.
+- This remains source/build-level validation. It does not test live PostgreSQL, Temporal worker connectivity, real uploads/R2 permissions and deletion, cookie/CSRF behavior, or a complete workflow against running infrastructure.
+
+
+## Upload URL SSRF mitigation — 2026-10-10
+
+- Added a shared guarded downloader and wired both the local and Cloudflare R2 storage providers to it. The control blocks non-HTTP(S) URL schemes, embedded URL credentials, IP-literal targets, private/reserved DNS results and nonstandard ports; DNS is checked then pinned for the request, redirects/proxies are disabled, and timeout/download size are bounded.
+- Removed `ACL: 'public-read'` from R2 uploads because Cloudflare R2 documents object ACL headers as unsupported; see [R2 S3 API compatibility](https://developers.cloudflare.com/r2/api/s3/api/). Public reads must be enabled through the intended bucket-level access configuration; no live bucket was changed.
+- Added focused tests in `tests/public.remote.download.test.cjs`. GitHub Actions run [38060298551](https://github.com/Naha1981/growchief-nahalabs/actions/runs/38060298551) passed dependency installation, Prisma schema validation, all 8 security tests, and the frontend/backend/orchestrator build on commit `2ce34f5d19fd35499a5586f0e5bb345c5902e2ba`.
+- This does not prove all real-world DNS/HTTP edge cases or replace a runtime test. Test against dedicated non-production infrastructure before public launch. R2 deletion remains a no-op and bucket public-access configuration still needs verification.
+
+
+## Readiness probes and storage deletion hardening — 2026-10-10
+
+- Added public `GET /health/live` and `GET /health/ready` backend routes. The readiness route executes a PostgreSQL query and checks the Temporal operator service. It returns generic 503 on dependency failure and avoids exposing internal connection errors. It does not yet check the orchestrator worker or file-storage availability at runtime.
+- Fixed deletion behavior across upload providers. Local storage maps returned `/v1/api/uploads/...` paths to the configured upload directory and rejects traversal or paths outside that directory. Cloudflare R2 validates the file URL against the configured public URL origin/prefix before issuing `DeleteObjectCommand`; its configured public URL is normalized to avoid accidental double slashes.
+- Unit tests cover successful and failed readiness checks, path traversal/out-of-root deletion, R2 origin/prefix rejection, and trailing-slash URL normalization.
+- GitHub Actions [run 38060874808](https://github.com/Naha1981/growchief-nahalabs/actions/runs/38060874808) passed 21 unit tests across five suites, Prisma validation, and the complete frontend/backend/orchestrator build. This is not a runtime deployment test.
+- Remaining blockers: validate a real isolated upload/download/delete against configured local/R2 storage; verify R2 public-access setup, database migration/backups, production cookie/CSRF/session settings, Temporal security/networking, orchestrator worker startup, and an end-to-end workflow. No deployment, live bucket change, production DB change, production secret creation, or paid resource provisioning was performed.

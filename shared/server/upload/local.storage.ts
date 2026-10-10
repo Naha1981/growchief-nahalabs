@@ -1,14 +1,14 @@
 import { IUploadProvider } from './upload.interface';
 import { mkdirSync, unlink, writeFileSync } from 'fs';
-import { extname } from 'path';
-import axios from 'axios';
+import { extname, isAbsolute, resolve, sep } from 'path';
+import { fetchPublicRemoteUrl } from './public.remote.download';
 import { extension } from 'mime-types';
 
 export class LocalStorage implements IUploadProvider {
   constructor(private uploadDirectory: string) {}
 
   async uploadSimple(path: string) {
-    const loadImage = await axios.get(path, { responseType: 'arraybuffer' });
+    const loadImage = await fetchPublicRemoteUrl(path);
     const contentType =
       loadImage?.headers?.['content-type'] ||
       loadImage?.headers?.['Content-Type'];
@@ -67,14 +67,56 @@ export class LocalStorage implements IUploadProvider {
     };
   }
 
+  private getFileSystemPath(filePath: string): string {
+    const uploadRoot = resolve(this.uploadDirectory);
+    let candidate: string;
+
+    if (filePath.startsWith('/v1/api/uploads/')) {
+      const relativePath = filePath.slice('/v1/api/uploads/'.length);
+      let segments: string[];
+      try {
+        segments = relativePath.split('/').map((segment) => decodeURIComponent(segment));
+      } catch {
+        throw new Error('Cannot delete an upload with an invalid encoded path.');
+      }
+
+      if (
+        segments.length === 0 ||
+        segments.some(
+          (segment) =>
+            !segment ||
+            segment === '.' ||
+            segment === '..' ||
+            segment.includes('/') ||
+            segment.includes('\\') ||
+            segment.includes('\0'),
+        )
+      ) {
+        throw new Error('Cannot delete an upload with an invalid path.');
+      }
+
+      candidate = resolve(uploadRoot, ...segments);
+    } else if (isAbsolute(filePath)) {
+      candidate = resolve(filePath);
+    } else {
+      throw new Error('Cannot delete an upload: supply its returned upload path or an absolute path.');
+    }
+
+    if (candidate === uploadRoot || !candidate.startsWith(`${uploadRoot}${sep}`)) {
+      throw new Error('Cannot delete a file outside the configured upload directory.');
+    }
+
+    return candidate;
+  }
+
   async removeFile(filePath: string): Promise<void> {
-    // Logic to remove the file from the filesystem goes here
-    return new Promise((resolve, reject) => {
-      unlink(filePath, (err) => {
+    const safeFilePath = this.getFileSystemPath(filePath);
+    return new Promise((resolvePromise, reject) => {
+      unlink(safeFilePath, (err) => {
         if (err) {
           reject(err);
         } else {
-          resolve();
+          resolvePromise();
         }
       });
     });

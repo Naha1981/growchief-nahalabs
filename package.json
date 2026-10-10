@@ -10,18 +10,19 @@
   "scripts": {
     "dev:billing": "npx concurrently \"stripe listen --forward-to localhost:3000/webhook/billing\" \"npm run dev\"",
     "dev": "pnpm run --filter ./apps/frontend --filter ./apps/backend --filter ./apps/orchestrator --parallel dev",
-    "build": "pnpm -r --workspace-concurrency=1 --filter ./apps/frontend --filter ./apps/backend -filter ./apps/orchestrator run build",
+    "build": "pnpm -r --workspace-concurrency=1 --filter ./apps/frontend --filter ./apps/backend --filter ./apps/orchestrator run build",
     "build:backend": "pnpm -r --filter ./apps/backend run build",
     "build:frontend": "pnpm -r --filter ./apps/frontend run build",
     "build:orchestrator": "pnpm -r --filter ./apps/orchestrator run build",
     "start:backend": "pnpm --filter ./apps/backend run start",
     "start:frontend": "pnpm --filter ./apps/frontend run start",
     "start:orchestrator": "pnpm --filter ./apps/orchestrator run start",
-    "prisma-generate": "pnpm dlx prisma generate --schema ./schema.prisma",
-    "prisma-db-push": "pnpm dlx prisma db push --schema ./schema.prisma",
+    "prisma-generate": "pnpm dlx prisma@6.13.0 generate --schema ./schema.prisma",
+    "prisma-db-push": "pnpm dlx prisma@6.13.0 db push --schema ./schema.prisma",
     "pm2": "pnpm run pm2-run",
     "pm2-run": "pm2 delete all || true && pnpm run prisma-db-push && pnpm run --parallel pm2 && pm2 logs",
-    "postinstall": "pnpm run prisma-generate"
+    "postinstall": "pnpm run prisma-generate",
+    "test:unit": "jest --config ./jest.config.cjs --runInBand"
   },
   "keywords": [],
   "author": "",

@@ -40,6 +40,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Validate Prisma schema
+        run: pnpm dlx prisma@6.13.0 validate --schema ./schema.prisma
+
+      - name: Run unit tests
+        run: pnpm run test:unit
+
       - name: Build application
         env:
           NODE_OPTIONS: --max-old-space-size=4096
