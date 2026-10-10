@@ -17,7 +17,7 @@ export class EncryptionService {
     if (
       !secret ||
       secret.length < 32 ||
-      /^(.)\\1{31,}$/.test(secret) ||
+      /^(.)\1{31,}$/.test(secret) ||
       placeholderSecrets.has(normalized || '')
     ) {
       throw new Error(
