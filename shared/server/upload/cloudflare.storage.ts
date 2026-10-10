@@ -2,7 +2,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import 'multer';
 import { extension as findExtension } from 'mime-types';
 import { IUploadProvider } from './upload.interface';
-import axios from 'axios';
+import { fetchPublicRemoteUrl } from './public.remote.download';
 import { makeId } from '@growchief/shared-both/utils/make.id';
 
 class CloudflareStorage implements IUploadProvider {
@@ -56,7 +56,7 @@ class CloudflareStorage implements IUploadProvider {
   }
 
   async uploadSimple(path: string) {
-    const loadImage = await axios.get(path, { responseType: 'arraybuffer' });
+    const loadImage = await fetchPublicRemoteUrl(path);
     const contentType =
       loadImage?.headers?.['content-type'] ||
       loadImage?.headers?.['Content-Type'];
