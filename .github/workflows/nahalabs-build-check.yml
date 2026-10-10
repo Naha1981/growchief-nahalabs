@@ -43,8 +43,8 @@ jobs:
       - name: Validate Prisma schema
         run: pnpm dlx prisma@6.13.0 validate --schema ./schema.prisma
 
-      - name: Test auth middleware
-        run: pnpm run test:auth
+      - name: Test security regressions
+        run: pnpm run test:security
 
       - name: Build application
         env:
