@@ -16,6 +16,10 @@ class CloudflareStorage implements IUploadProvider {
     private _bucketName: string,
     private _uploadUrl: string,
   ) {
+    while (this._uploadUrl.endsWith('/')) {
+      this._uploadUrl = this._uploadUrl.slice(0, -1);
+    }
+
     this._client = new S3Client({
       endpoint: `https://${accountID}.r2.cloudflarestorage.com`,
       region,
