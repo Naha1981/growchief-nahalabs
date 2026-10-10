@@ -15,7 +15,7 @@ Do not deploy the stock Compose stack publicly or create a frontend-only Render 
 - `docker-compose.yml` starts the application plus its own PostgreSQL, Temporal server, Temporal PostgreSQL, Elasticsearch, Temporal admin tools, and Temporal UI.
 - Compose contains development credentials, including `AUTH_SECRET: "YourSpecialString!@#111"`, predictable database passwords, and example Google OAuth values. These are not production secrets.
 - The root `.env.example` lists database, auth, storage, URL, email, OAuth, newsletter, browser/data-provider and OpenAI settings. Several are feature-specific; they must be classified by code path before deciding which are truly optional.
-- The compose configuration uses a self-hosted Temporal endpoint (`temporal:7233`). Switching to Temporal Cloud is not just changing a URL: the worker/client connection code must support the Cloud namespace, TLS and authentication settings. That has not yet been verified.
+- The Temporal module in `shared/server/temporal/temporal.module.ts` passes only `address` and `namespace` to `nestjs-temporal-core`; it does not configure TLS or API-key authentication. The current code therefore does not establish a working Temporal Cloud connection. Treat self-hosted Temporal as the only verified direction unless Cloud support is implemented and tested.
 - The source repository is AGPL-3.0. Review licence obligations before offering a modified hosted version to third parties.
 
 ## Hosting assessment
@@ -37,17 +37,17 @@ Before any public deployment:
 - Decide on persistent object storage (the repository supports local or Cloudflare S3-compatible storage); local container storage is not durable on ephemeral hosts.
 - Configure Google OAuth only if Google sign-in is required; set exact production callback URLs.
 - Configure email/newsletter and data-provider keys only if the enabled features need them. Never commit credentials into Git.
-- Decide whether Temporal will be self-hosted or Temporal Cloud. For Cloud, verify TLS/namespace/API-key support in the actual code before configuring a deployment.
+- Plan on self-hosted Temporal for the current code, or first implement and test Temporal Cloud TLS/authentication support. Do not point this configuration at a Cloud endpoint and assume it is secure or compatible.
 - Confirm health checks, migrations, worker startup, file uploads, sign-in, and a harmless end-to-end workflow before enabling any outbound social actions.
 - Keep social automation paused until account authorization, platform terms, rate limits, and opt-out controls are reviewed.
 
 ## Next engineering steps
 
-1. Inspect `schema.prisma`, all Temporal connection/client setup, runtime config validation, and upload handling.
+1. Continue inspecting runtime config validation and upload handling; the Prisma schema and Temporal module have been located, and the current Temporal module lacks explicit Cloud TLS/auth configuration.
 2. Trace each environment variable to its use and classify it as required, optional, or feature-gated.
 3. Select a hosting topology that can keep the backend and orchestrator running, provides durable storage, and secures Temporal.
 4. Add deployment configuration only after those checks; then run builds and a smoke test before creating public services.
 
 ## Current state
 
-No Render resources were created or changed as part of this audit. No production secrets were generated or stored. This file is a readiness record, not a claim that deployment or runtime testing has succeeded.
+A GitHub Actions build workflow has been added on the readiness branch. Its first run failed before the build at Node setup; that workflow was corrected and a subsequent run is currently installing dependencies. No Render resources were created or changed as part of this audit. No production secrets were generated or stored. This file is a readiness record, not a claim that deployment or runtime testing has succeeded.
