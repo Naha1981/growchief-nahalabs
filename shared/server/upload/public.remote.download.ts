@@ -160,7 +160,7 @@ function validateRemoteUrl(input: string): URL {
   return url;
 }
 
-export async function fetchPublicRemoteUrl(input: string): Promise<AxiosResponse<ArrayBuffer>> {
+export async function fetchPublicRemoteUrl(input: string): Promise<AxiosResponse<Buffer>> {
   const url = validateRemoteUrl(input);
   const hostname = url.hostname.toLowerCase();
 
@@ -196,7 +196,7 @@ export async function fetchPublicRemoteUrl(input: string): Promise<AxiosResponse
   const httpsAgent = new HttpsAgent({ keepAlive: false, lookup: pinnedLookup as any });
 
   try {
-    return await axios.get<ArrayBuffer>(url.href, {
+    return await axios.get<Buffer>(url.href, {
       responseType: 'arraybuffer',
       timeout: 15000,
       maxContentLength: 8 * 1024 * 1024,
