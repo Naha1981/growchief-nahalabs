@@ -54,3 +54,14 @@ Before any public deployment:
 ## Current state
 
 A GitHub Actions build workflow has been added on the readiness branch. The first successful remote run completed dependency installation and built the frontend, backend, and orchestrator (run: https://github.com/Naha1981/growchief-nahalabs/actions/runs/38051200823). The follow-up run for the latest Prisma pin/docs commit also passed all steps, including dependency installation and the application build (run: https://github.com/Naha1981/growchief-nahalabs/actions/runs/38052091131). The root Prisma generate/db-push scripts are pinned to Prisma 6.13.0 to match `@prisma/client`. The workflow now additionally validates `schema.prisma` with Prisma 6.13.0 before building. Latest run 38052288448 passed dependency installation, Prisma schema validation and application build: https://github.com/Naha1981/growchief-nahalabs/actions/runs/38052288448. This is a build/schema check only, not a runtime/integration test. No Render resources were created or changed as part of this audit. No production secrets were generated or stored. This file is a readiness record, not a claim that deployment or runtime testing has succeeded.
+
+
+## Authentication and upload code-path audit — 2026-10-10
+
+- JWT signing and verification use `process.env.AUTH_SECRET` directly in `shared/server/encryption/encryption.service.ts`. The app does not show startup validation for a missing/weak secret in the inspected code; deployment must provide a high-entropy secret and fail closed if it is absent. Never use the sample Compose secret.
+- Auth cookies are configured `httpOnly`, `secure`, and `sameSite: 'none'`, with a one-year expiry. Confirm production frontend/backend domain alignment, HTTPS, CSRF protections, and session lifetime/revocation policy before launch.
+- The backend configures a 20 MB JSON body limit. Reassess this against endpoints that accept user-controlled payloads; a generous global limit can increase resource-exhaustion exposure.
+- Both local and Cloudflare upload providers implement `uploadSimple(path)` by fetching a caller-supplied URL with Axios. This creates an SSRF risk unless callers validate and restrict schemes, hosts, redirects, resolved IP ranges, response size and timeouts. Do not expose this functionality publicly until the call paths and controls are verified.
+- Cloudflare upload code sends `ACL: 'public-read'` and its `removeFile()` method does not delete objects. Confirm bucket policy/ACL compatibility and intended file privacy; implement and test deletion before relying on cleanup.
+- Root endpoint returns `App is running!`, but this is only a process response and does not prove database, Temporal, storage or worker readiness.
+- These are source-code findings, not proof of an exploitable public instance: no runtime service was deployed or tested. Treat SSRF, upload controls, secret validation, session policy and readiness probes as blockers for public production deployment.
