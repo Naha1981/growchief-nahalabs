@@ -67,8 +67,10 @@ A GitHub Actions build workflow has been added on the readiness branch. The firs
 - These are source-code findings, not proof of an exploitable public instance: no runtime service was deployed or tested. Treat SSRF, upload controls, secret validation, session policy and readiness probes as blockers for public production deployment.
 
 
-## Auth middleware correction — 2026-10-10
 
-- Fixed a fail-open logic check in `apps/backend/src/services/auth/auth.middleware.ts`: the middleware previously tested `if (!organization)`, but `organization` is an array and remains truthy when empty. It now rejects the request when no active organization can be selected (`if (!setOrg)`). This prevents an authenticated account with no active organization from continuing with an undefined `req.org`.
-- This is a targeted source correction, not a substitute for an automated middleware unit test or integration test. The repository's backend package scripts expose build/format/dev/start commands but no test script; a repeatable auth middleware test and CI test job should be added before production readiness.
-- CI after commit `11a0437bd935d87b86c75ac287e68a383cec6dd9` is pending confirmation; do not infer success from the earlier green build.
+## Auth middleware correction and regression tests — 2026-10-10
+
+- Fixed a fail-open logic check in `apps/backend/src/services/auth/auth.middleware.ts`: the middleware previously tested `if (!organization)`, but `organization` is an array and remains truthy when empty. It now rejects the request when no active organization can be selected (`if (!setOrg)`).
+- Added `jest.config.cjs`, `tests/auth.middleware.test.cjs`, the root `test:auth` script, and a CI test step. Regression tests cover (1) rejecting an authenticated user with no active organization, (2) allowing a user with an active organization, and (3) rejecting a request without an authentication token.
+- GitHub Actions run [38059484529](https://github.com/Naha1981/growchief-nahalabs/actions/runs/38059484529) passed dependency installation, Prisma 6.13.0 schema validation, the new auth middleware tests, and the frontend/backend/orchestrator build on commit `2e8d529f8ccd0baccc4e425449c30e1aa9ce4219`.
+- This remains source/build-level validation. It does not test live PostgreSQL, Temporal worker connectivity, storage permissions, cookie/CSRF behavior, or a complete workflow against running infrastructure.
