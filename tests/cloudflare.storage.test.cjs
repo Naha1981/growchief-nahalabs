@@ -37,6 +37,30 @@ describe('CloudflareStorage deletion', () => {
     expect(mockSend).toHaveBeenCalledTimes(1);
   });
 
+  test('returns a normalized path when the configured upload URL has a trailing slash', async () => {
+    const trailingSlashStorage = new CloudflareStorage(
+      'account',
+      'access-key',
+      'secret-key',
+      'auto',
+      'bucket-name',
+      'https://assets.example.com/media/',
+    );
+
+    const result = await trailingSlashStorage.uploadFile(
+      {
+        buffer: Buffer.from('image'),
+        mimetype: 'image/png',
+        size: 5,
+        originalname: 'image.png',
+      },
+      'customer-1.png',
+    );
+
+    expect(result.path).toBe('https://assets.example.com/media/customer-1.png');
+    expect(mockSend).toHaveBeenCalledTimes(1);
+  });
+
   test('supports a configured upload URL ending with a slash', async () => {
     const trailingSlashStorage = new CloudflareStorage(
       'account',
